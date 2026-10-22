@@ -1,0 +1,23 @@
+server:
+  port: 8080
+
+rag:
+  corpus: classpath*:corpus/*.md     # loaded at start-up; more can be posted to /api/documents
+  chunk-size: 700                    # characters per chunk
+  chunk-overlap: 120                 # so a rule split across two chunks is still found whole
+  top-k: 4                           # chunks handed to the model
+  min-score: 0.15                    # below this the assistant says it cannot find the answer
+  llm:
+    provider: ${RAG_LLM_PROVIDER:auto}   # auto = Claude when ANTHROPIC_API_KEY is set, else extractive
+    model: ${RAG_LLM_MODEL:claude-opus-5-5}
+    effort: ${RAG_LLM_EFFORT:medium}     # low | medium | high - set explicitly; grounded Q&A rarely needs more
+    max-tokens: 2000
+    timeout-seconds: 60
+  audit:
+    file: ${RAG_AUDIT_FILE:}         # empty = in memory only
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
