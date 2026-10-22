@@ -1,5 +1,7 @@
 # BFSI RAG Assistant
 
+[![CI](https://github.com/nasable1/bfsi-rag-assistant/actions/workflows/ci.yml/badge.svg)](https://github.com/nasable1/bfsi-rag-assistant/actions/workflows/ci.yml)
+
 Grounded question answering over a bank's product and policy documents, built the way a regulated
 bank would need it: **every answer cites its source, personal data never reaches the model, injected
 instructions are refused, every exchange is in a tamper-evident audit trail, and retrieval quality is a
