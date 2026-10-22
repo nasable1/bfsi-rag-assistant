@@ -75,7 +75,7 @@ class AnswerServiceTest {
     void inventedCitationsAreRemoved() {
         Answer a = TestSupport.pipeline(replying("Two checkers are needed [1]. See also [9]."))
                 .ask("How many checkers approve a payment of Rs 1 crore?");
-        assertThat(a.answer()).contains("[1]").doesNotContain("[9]");
+        assertThat(a.answer()).contains("[1]").doesNotContain("[9]").endsWith("See also.");
         assertThat(a.flags()).contains("citations-repaired");
     }
 

@@ -22,6 +22,13 @@ class GuardrailsTest {
     }
 
     @Test
+    void masksUpiIdsAndLowerCaseIdentifiers() {
+        var r = redactor.redact("Refund to ramesh.k@okaxis, pan abcde1234f, ifsc demo0001234");
+        assertThat(r.text()).doesNotContain("ramesh.k@okaxis", "abcde1234f", "demo0001234");
+        assertThat(r.found()).contains("UPI", "PAN", "IFSC");
+    }
+
+    @Test
     void leavesAmountsAndReferenceNumbersAlone() {
         var r = redactor.redact("RTGS minimum is Rs 2,00,000; limit Rs 10 crore; ticket 4111111111111112 fails Luhn");
         assertThat(r.text()).contains("Rs 2,00,000", "Rs 10 crore");

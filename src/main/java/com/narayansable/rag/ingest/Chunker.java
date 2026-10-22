@@ -2,6 +2,7 @@ package com.narayansable.rag.ingest;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.regex.Pattern;
 
 /**
  * Splits a document into overlapping chunks along paragraph boundaries.
@@ -13,6 +14,9 @@ import java.util.List;
  * Every chunk remembers the heading it sits under.
  */
 public final class Chunker {
+
+    private static final Pattern HEADING_LINE = Pattern.compile("(?m)^(#{1,6}[ \\t]+\\S.*)$");
+    private static final Pattern HEADING = Pattern.compile("#{1,6}[ \\t]+\\S.*");
 
     private final int size;
     private final int overlap;
@@ -30,12 +34,15 @@ public final class Chunker {
         StringBuilder current = new StringBuilder();
         String heading = doc.title();
         String chunkHeading = heading;
-        for (String block : doc.text().split("\\n\\s*\\n")) {
+        // Every heading line becomes its own block, so text written straight under a heading (no
+        // blank line between them) is kept and filed under that heading instead of being dropped.
+        String text = HEADING_LINE.matcher(doc.text().replace("\r\n", "\n")).replaceAll("\n\n$1\n\n");
+        for (String block : text.split("\\n\\s*\\n")) {
             String para = block.strip();
             if (para.isEmpty()) {
                 continue;
             }
-            if (para.startsWith("#")) {
+            if (HEADING.matcher(para).matches()) {
                 heading = para.replaceFirst("^#+\\s*", "").strip();
                 if (current.length() > 0) {               // a new section starts a new chunk
                     chunks.add(chunk(doc, chunkHeading, current.toString(), chunks.size()));

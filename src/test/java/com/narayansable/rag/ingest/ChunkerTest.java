@@ -29,6 +29,14 @@ class ChunkerTest {
     }
 
     @Test
+    void textDirectlyUnderAHeadingIsKept() {
+        var doc = new Document("d", "T", "# T\n## Fees\nRTGS fee is Rs 25 per payment.\n\n## Other\nNothing else.");
+        var chunks = new Chunker(500, 50).split(doc);
+        assertThat(chunks).extracting(Chunk::section).containsExactly("Fees", "Other");
+        assertThat(chunks.get(0).text()).isEqualTo("RTGS fee is Rs 25 per payment.");
+    }
+
+    @Test
     void overlapMustBeSmallerThanSize() {
         assertThatThrownBy(() -> new Chunker(100, 100)).isInstanceOf(IllegalArgumentException.class);
     }

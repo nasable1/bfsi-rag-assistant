@@ -57,6 +57,6 @@ public class AskController {
     public Map<String, Object> stats() {
         long broken = audit.verify();
         return Map.of("documents", index.documentCount(), "chunks", index.size(),
-                "auditEntries", audit.entries().size(), "auditChainIntact", broken < 0);
+                "auditEntries", audit.size(), "auditChainIntact", broken < 0);
     }
 }

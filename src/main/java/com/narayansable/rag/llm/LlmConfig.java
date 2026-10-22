@@ -8,6 +8,8 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
 import java.time.Duration;
+import java.util.List;
+import java.util.Locale;
 
 /**
  * Chooses the generator. {@code rag.llm.provider}: {@code claude}, {@code extractive}, or
@@ -22,8 +24,15 @@ public class LlmConfig {
     @Bean
     public LlmClient llmClient(RagProperties props) {
         var llm = props.llm();
-        boolean haveKey = System.getenv("ANTHROPIC_API_KEY") != null && !System.getenv("ANTHROPIC_API_KEY").isBlank();
-        boolean useClaude = "claude".equalsIgnoreCase(llm.provider()) || ("auto".equalsIgnoreCase(llm.provider()) && haveKey);
+        String provider = llm.provider() == null ? "auto" : llm.provider().strip().toLowerCase(Locale.ROOT);
+        if (!List.of("auto", "claude", "extractive").contains(provider)) {
+            // Fail at start-up: a typo must not silently switch a deployment to offline answers.
+            throw new IllegalStateException("rag.llm.provider must be auto, claude or extractive, not '"
+                    + llm.provider() + "'");
+        }
+        String key = System.getenv("ANTHROPIC_API_KEY");
+        boolean haveKey = key != null && !key.isBlank();
+        boolean useClaude = provider.equals("claude") || (provider.equals("auto") && haveKey);
         if (!useClaude) {
             log.info("Answer generation: extractive (no model call)");
             return new ExtractiveClient();

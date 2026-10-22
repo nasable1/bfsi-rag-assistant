@@ -11,7 +11,7 @@ rag:
     provider: ${RAG_LLM_PROVIDER:auto}   # auto = Claude when ANTHROPIC_API_KEY is set, else extractive
     model: ${RAG_LLM_MODEL:claude-opus-5-5}
     effort: ${RAG_LLM_EFFORT:medium}     # low | medium | high - set explicitly; grounded Q&A rarely needs more
-    max-tokens: 2000
+    max-tokens: 16000                    # thinking is always on for Opus 5.5 and counts against this
     timeout-seconds: 60
   audit:
     file: ${RAG_AUDIT_FILE:}         # empty = in memory only

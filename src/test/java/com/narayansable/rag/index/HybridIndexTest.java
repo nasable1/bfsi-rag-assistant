@@ -42,6 +42,19 @@ class HybridIndexTest {
     }
 
     @Test
+    void replacingADocumentDoesNotDuplicateIt() {
+        var index = new HybridIndex();
+        index.replaceDocument("rtgs", List.of(c("rtgs", "RTGS", "The minimum RTGS amount is Rs 2,00,000.")));
+        index.replaceDocument("neft", List.of(c("neft", "NEFT", "NEFT settles in half-hourly batches.")));
+        index.replaceDocument("rtgs", List.of(c("rtgs", "RTGS", "The minimum RTGS amount is Rs 1,00,000.")));
+        assertThat(index.size()).isEqualTo(2);
+        assertThat(index.documentCount()).isEqualTo(2);
+        var hits = index.search("minimum RTGS amount", 3);
+        assertThat(hits).hasSize(1);
+        assertThat(hits.get(0).chunk().text()).contains("1,00,000");
+    }
+
+    @Test
     void stemmerHandlesCommonSuffixes() {
         assertThat(Tokenizer.tokens("payments approved approving policies"))
                 .containsExactly("payment", "approv", "approv", "policy");

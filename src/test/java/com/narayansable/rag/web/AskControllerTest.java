@@ -10,6 +10,7 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.greaterThan;
+import static org.hamcrest.Matchers.not;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -37,6 +38,22 @@ class AskControllerTest {
     void rejectsBlankQuestion() throws Exception {
         mvc.perform(post("/api/ask").contentType(MediaType.APPLICATION_JSON).content("{\"question\":\" \"}"))
                 .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void reuploadReplacesTheDocumentAndPiiIsMasked() throws Exception {
+        String v1 = "# Demo Bank - Locker Rent\\n\\n## Rent\\n\\nLocker rent is Rs 3,000 a year. Queries: lockers@demobank.in";
+        String v2 = "# Demo Bank - Locker Rent\\n\\n## Rent\\n\\nLocker rent is Rs 4,000 a year. Queries: lockers@demobank.in";
+        for (String doc : new String[] {v1, v2}) {
+            mvc.perform(post("/api/documents").contentType(MediaType.APPLICATION_JSON)
+                            .content("{\"id\":\"locker-rent\",\"markdown\":\"" + doc + "\"}"))
+                    .andExpect(status().isCreated());
+        }
+        mvc.perform(post("/api/ask").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"question\":\"How much is the locker rent per year?\"}"))
+                .andExpect(jsonPath("$.answer", containsString("Rs 4,000")))
+                .andExpect(jsonPath("$.answer", not(containsString("Rs 3,000"))))
+                .andExpect(jsonPath("$.citations[0].excerpt", containsString("[EMAIL]")));
     }
 
     @Test

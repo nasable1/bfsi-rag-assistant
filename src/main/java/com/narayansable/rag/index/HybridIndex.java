@@ -47,18 +47,51 @@ public class HybridIndex {
     public void addAll(Collection<Chunk> chunks) {
         lock.writeLock().lock();
         try {
-            for (Chunk c : chunks) {
-                List<String> toks = Tokenizer.tokens(c.section() + " " + c.text());
-                Map<String, Integer> tf = counts(toks);
-                Map<String, Integer> feats = features(toks);
-                entries.add(new Entry(c, tf, toks.size(), feats));
-                tf.keySet().forEach(w -> docFreq.merge(w, 1, Integer::sum));
-                feats.keySet().forEach(f -> featureFreq.merge(f, 1, Integer::sum));
-                totalLength += toks.size();
-                documents.add(c.documentId());
-            }
+            chunks.forEach(this::add);
         } finally {
             lock.writeLock().unlock();
+        }
+    }
+
+    /**
+     * Swaps a document's chunks for new ones in one step, so re-uploading a document updates it
+     * instead of indexing it twice (duplicate chunks would crowd the top-k and skew term statistics).
+     */
+    public void replaceDocument(String documentId, Collection<Chunk> chunks) {
+        lock.writeLock().lock();
+        try {
+            removeDocument(documentId);
+            chunks.forEach(this::add);
+        } finally {
+            lock.writeLock().unlock();
+        }
+    }
+
+    private void add(Chunk c) {
+        List<String> toks = Tokenizer.tokens(c.section() + " " + c.text());
+        Map<String, Integer> tf = counts(toks);
+        Map<String, Integer> feats = features(toks);
+        entries.add(new Entry(c, tf, toks.size(), feats));
+        tf.keySet().forEach(w -> docFreq.merge(w, 1, Integer::sum));
+        feats.keySet().forEach(f -> featureFreq.merge(f, 1, Integer::sum));
+        totalLength += toks.size();
+        documents.add(c.documentId());
+    }
+
+    private void removeDocument(String documentId) {
+        if (!documents.remove(documentId)) {
+            return;
+        }
+        var it = entries.iterator();
+        while (it.hasNext()) {
+            Entry e = it.next();
+            if (!e.chunk().documentId().equals(documentId)) {
+                continue;
+            }
+            it.remove();
+            e.tf().keySet().forEach(w -> docFreq.computeIfPresent(w, (k, n) -> n > 1 ? n - 1 : null));
+            e.features().keySet().forEach(f -> featureFreq.computeIfPresent(f, (k, n) -> n > 1 ? n - 1 : null));
+            totalLength -= e.length();
         }
     }
 
@@ -96,11 +129,21 @@ public class HybridIndex {
     }
 
     public int size() {
-        return entries.size();
+        lock.readLock().lock();
+        try {
+            return entries.size();
+        } finally {
+            lock.readLock().unlock();
+        }
     }
 
     public int documentCount() {
-        return documents.size();
+        lock.readLock().lock();
+        try {
+            return documents.size();
+        } finally {
+            lock.readLock().unlock();
+        }
     }
 
     private static Map<String, Integer> counts(List<String> toks) {

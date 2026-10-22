@@ -5,7 +5,7 @@ bank would need it: **every answer cites its source, personal data never reaches
 instructions are refused, every exchange is in a tamper-evident audit trail, and retrieval quality is a
 build gate.**
 
-Spring Boot 3 · Java 17 · Anthropic Claude (official Java SDK) · 33 tests, no API key needed to run them.
+Spring Boot 3 · Java 17 · Anthropic Claude (official Java SDK) · 40 tests, no API key needed to run them.
 
 > The corpus is a **fictional "Demo Bank"** written for this project (payment cut-offs, maker-checker,
 > liquidity sweeps, KYC, exceptions). It is illustrative only - not any real bank's policy.
@@ -48,7 +48,7 @@ flowchart LR
 |---|---|
 | `ingest` | Markdown → overlapping chunks along paragraph boundaries, each tagged with its section heading |
 | `index` | `HybridIndex`: BM25 over word tokens blended with TF-IDF cosine over words + bigrams; a single 0..1 score |
-| `guard` | `PiiRedactor` (PAN, Aadhaar, Luhn-checked cards, account numbers, IFSC, phone, email), `PromptInjectionDetector` |
+| `guard` | `PiiRedactor` (PAN, Aadhaar, Luhn-checked cards, account numbers, IFSC, UPI ID, phone, email), `PromptInjectionDetector` |
 | `llm` | `LlmClient` with `ClaudeClient` (Anthropic Java SDK) and `ExtractiveClient` (deterministic, offline) |
 | `answer` | `AnswerService`: the pipeline above, in that order |
 | `audit` | `AuditTrail`: SHA-256 hash chain; `verify()` finds the first edited or deleted entry |
@@ -63,7 +63,8 @@ flowchart LR
    that does not match a supplied source (flag `citations-repaired`) and withholds an answer left with
    none (`uncited-answer-withheld`).
 3. **PII is masked before anything leaves the service** - the model, the logs and the audit trail only
-   ever see `[ACCOUNT]`, `[PAN]`, ... Masking order is specific-first; cards are Luhn-checked so amounts
+   ever see `[ACCOUNT]`, `[PAN]`, ... Uploaded documents are masked too, before indexing, since chunk
+   text is sent to the model and returned as citation excerpts. Masking order is specific-first; cards are Luhn-checked so amounts
    and reference numbers survive.
 4. **Hybrid lexical retrieval over a vector database, for now.** Banking questions hinge on exact rare
    terms (RTGS, IFSC, maker-checker) where BM25 is strong; bigram cosine adds phrase matching. A
@@ -77,7 +78,9 @@ flowchart LR
 6. **Effort is set explicitly** (`medium` by default): grounded Q&A over four chunks rarely needs deeper
    reasoning, and effort is the main cost/latency lever.
 7. **Tamper-evident audit.** Each entry hashes its content plus the previous hash, so editing or deleting
-   any past exchange is detectable - the same idea as a hash-chained transaction audit log.
+   any past exchange is detectable - the same idea as a hash-chained transaction audit log. With
+   `RAG_AUDIT_FILE` set, the chain survives restarts and an edit made to the file while the service
+   was down shows up as `auditChainIntact: false`.
 8. **Retrieval quality is a test.** `RetrievalEvalTest` runs 15 golden questions and fails the build if
    hit@1 < 0.85 or hit@3 < 1.0 (currently 1.00 / 1.00), so a tokenizer or chunking change that quietly
    hurts recall cannot ship.
@@ -85,7 +88,7 @@ flowchart LR
 ## Run it
 
 ```bash
-mvn test                                   # 33 tests, offline
+mvn test                                   # 40 tests, offline
 mvn spring-boot:run                        # extractive mode - no key, no network
 ANTHROPIC_API_KEY=sk-ant-... mvn spring-boot:run          # Claude (claude-opus-5-5, effort medium)
 
@@ -95,7 +98,7 @@ curl -s localhost:8080/api/stats           # documents, chunks, audit entries, c
 ```
 
 Configuration (`application.yml` or environment): `RAG_LLM_PROVIDER` (`auto` | `claude` | `extractive`),
-`RAG_LLM_MODEL`, `RAG_LLM_EFFORT`, `RAG_AUDIT_FILE` (append the audit trail to a file).
+`RAG_LLM_MODEL`, `RAG_LLM_EFFORT`, `RAG_AUDIT_FILE` (append the audit trail to a JSON Lines file; on restart the chain continues from it and is re-verified).
 
 Docker: `docker build -t bfsi-rag . && docker run -p 8080:8080 -e ANTHROPIC_API_KEY bfsi-rag`
 

@@ -128,7 +128,8 @@ public class AnswerService {
             citations.add(new Answer.Citation(n, s.chunk().documentTitle(), s.chunk().section(),
                     Math.round(s.score() * 1000) / 1000.0, excerpt));
         }
-        return finish(question, cleaned.toString().replaceAll(" {2,}", " ").strip(), true, citations, flags, model, start);
+        String text = cleaned.toString().replaceAll(" {2,}", " ").replaceAll(" +([.,;:])", "$1").strip();
+        return finish(question, text, true, citations, flags, model, start);
     }
 
     private Answer finish(String question, String answer, boolean grounded, List<Answer.Citation> citations,

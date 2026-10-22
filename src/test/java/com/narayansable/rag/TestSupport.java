@@ -21,7 +21,7 @@ public final class TestSupport {
     public static HybridIndex corpusIndex() {
         var index = new HybridIndex();
         try {
-            new CorpusLoader(PROPS, index).load();
+            new CorpusLoader(PROPS, index, new PiiRedactor()).load();
         } catch (Exception e) {
             throw new IllegalStateException(e);
         }

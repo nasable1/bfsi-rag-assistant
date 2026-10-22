@@ -10,7 +10,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
- * Masks Indian banking PII before text leaves the service (to an LLM) or is written to the audit
+ * Masks Indian banking PII (email, UPI ID, PAN, card, Aadhaar, IFSC, phone, account number) before text leaves the service (to an LLM) or is written to the audit
  * trail. A customer pasting "my account 001234567890, PAN ABCDE1234F" into a question must not
  * send either to a third-party model.
  *
@@ -25,11 +25,14 @@ public class PiiRedactor {
 
     static {
         RULES.put("EMAIL", Pattern.compile("[\\w.+-]+@[\\w-]+(\\.[\\w-]+)+"));
-        RULES.put("PAN", Pattern.compile("\\b[A-Z]{5}\\d{4}[A-Z]\\b"));
+        // UPI IDs (name@okbank) have no dot after the @, so the email rule does not catch them.
+        RULES.put("UPI", Pattern.compile("[\\w.-]{2,}@[A-Za-z][A-Za-z0-9]{1,63}\\b"));
+        // PAN and IFSC are matched case-insensitively: people type them in lower case too.
+        RULES.put("PAN", Pattern.compile("\\b[A-Z]{5}\\d{4}[A-Z]\\b", Pattern.CASE_INSENSITIVE));
         // Cards before Aadhaar: the first 12 digits of "4111 1111 1111 1111" look like an Aadhaar.
         RULES.put("CARD", Pattern.compile("\\b(?:\\d[ -]?){12,18}\\d\\b"));
         RULES.put("AADHAAR", Pattern.compile("(?<!\\d)(?<!\\d[ -])[2-9]\\d{3}[ -]?\\d{4}[ -]?\\d{4}(?![ -]?\\d)"));
-        RULES.put("IFSC", Pattern.compile("\\b[A-Z]{4}0[A-Z0-9]{6}\\b"));
+        RULES.put("IFSC", Pattern.compile("\\b[A-Z]{4}0[A-Z0-9]{6}\\b", Pattern.CASE_INSENSITIVE));
         RULES.put("PHONE", Pattern.compile("(?<!\\d)(?:\\+91[ -]?)?[6-9]\\d{9}(?!\\d)"));
         RULES.put("ACCOUNT", Pattern.compile("(?<!\\d)\\d{9,18}(?!\\d)"));
     }
