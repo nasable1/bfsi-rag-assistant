@@ -1,0 +1,44 @@
+# One-click deploy to Render (Blueprint): the Docker image plus a managed Postgres.
+# Render generates both API keys - read them in the service's Environment tab. Set ANTHROPIC_API_KEY
+# there too to answer with Claude. Plans and prices are Render's; check them before deploying.
+services:
+  - type: web
+    name: bfsi-rag-assistant
+    runtime: docker
+    plan: standard
+    healthCheckPath: /actuator/health/readiness
+    envVars:
+      - key: SPRING_PROFILES_ACTIVE
+        value: postgres
+      - key: RAG_DB_HOST
+        fromDatabase:
+          name: bfsi-rag-db
+          property: host
+      - key: RAG_DB_PORT
+        fromDatabase:
+          name: bfsi-rag-db
+          property: port
+      - key: RAG_DB_NAME
+        fromDatabase:
+          name: bfsi-rag-db
+          property: database
+      - key: RAG_DB_USER
+        fromDatabase:
+          name: bfsi-rag-db
+          property: user
+      - key: RAG_DB_PASSWORD
+        fromDatabase:
+          name: bfsi-rag-db
+          property: password
+      - key: RAG_ADMIN_KEY
+        generateValue: true
+      - key: RAG_USER_KEY
+        generateValue: true
+      - key: ANTHROPIC_API_KEY
+        sync: false
+
+databases:
+  - name: bfsi-rag-db
+    databaseName: rag
+    user: rag
+    plan: basic-256mb

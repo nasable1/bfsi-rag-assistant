@@ -3,3 +3,5 @@ target/
 *.iml
 .vscode/
 *.log
+data/
+.env

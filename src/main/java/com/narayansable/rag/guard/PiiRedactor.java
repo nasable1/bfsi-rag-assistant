@@ -33,7 +33,8 @@ public class PiiRedactor {
         RULES.put("CARD", Pattern.compile("\\b(?:\\d[ -]?){12,18}\\d\\b"));
         RULES.put("AADHAAR", Pattern.compile("(?<!\\d)(?<!\\d[ -])[2-9]\\d{3}[ -]?\\d{4}[ -]?\\d{4}(?![ -]?\\d)"));
         RULES.put("IFSC", Pattern.compile("\\b[A-Z]{4}0[A-Z0-9]{6}\\b", Pattern.CASE_INSENSITIVE));
-        RULES.put("PHONE", Pattern.compile("(?<!\\d)(?:\\+91[ -]?)?[6-9]\\d{9}(?!\\d)"));
+        // Indian mobiles, also written "98765 43210" / "+91-98765-43210" / "098765 43210".
+        RULES.put("PHONE", Pattern.compile("(?<!\\d)(?:\\+91[ -]?|0)?[6-9]\\d{4}[ -]?\\d{5}(?![ -]?\\d)"));
         RULES.put("ACCOUNT", Pattern.compile("(?<!\\d)\\d{9,18}(?!\\d)"));
     }
 

@@ -1,0 +1,9 @@
+target/
+data/
+.git/
+.github/
+.idea/
+.vscode/
+*.iml
+*.log
+.env

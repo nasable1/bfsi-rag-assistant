@@ -9,7 +9,7 @@ class ChunkerTest {
 
     @Test
     void chunksKeepTheirSectionHeading() {
-        var doc = new Document("d", "Title", "# Title\n\n## NEFT\n\nNEFT runs 24x7.\n\n## RTGS\n\nRTGS minimum is Rs 2,00,000.");
+        var doc = new ParsedDocument("d", "Title", "# Title\n\n## NEFT\n\nNEFT runs 24x7.\n\n## RTGS\n\nRTGS minimum is Rs 2,00,000.");
         var chunks = new Chunker(500, 50).split(doc);
         assertThat(chunks).hasSize(2);
         assertThat(chunks.get(0).section()).isEqualTo("NEFT");
@@ -20,7 +20,7 @@ class ChunkerTest {
     @Test
     void longTextIsSplitWithOverlap() {
         String para = "Sentence number one is here. ".repeat(60);
-        var chunks = new Chunker(300, 60).split(new Document("d", "T", para));
+        var chunks = new Chunker(300, 60).split(new ParsedDocument("d", "T", para));
         assertThat(chunks.size()).isGreaterThan(3);
         assertThat(chunks).allSatisfy(c -> assertThat(c.text().length()).isLessThanOrEqualTo(300 + 60));
         // the start of each later chunk repeats the end of the previous one
@@ -30,7 +30,7 @@ class ChunkerTest {
 
     @Test
     void textDirectlyUnderAHeadingIsKept() {
-        var doc = new Document("d", "T", "# T\n## Fees\nRTGS fee is Rs 25 per payment.\n\n## Other\nNothing else.");
+        var doc = new ParsedDocument("d", "T", "# T\n## Fees\nRTGS fee is Rs 25 per payment.\n\n## Other\nNothing else.");
         var chunks = new Chunker(500, 50).split(doc);
         assertThat(chunks).extracting(Chunk::section).containsExactly("Fees", "Other");
         assertThat(chunks.get(0).text()).isEqualTo("RTGS fee is Rs 25 per payment.");

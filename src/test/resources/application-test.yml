@@ -1,0 +1,16 @@
+spring:
+  datasource:
+    url: jdbc:h2:mem:rag-${random.uuid};MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;DEFAULT_NULL_ORDERING=HIGH;DB_CLOSE_DELAY=-1
+
+rag:
+  llm:
+    provider: extractive
+  security:
+    asks-per-minute: 1000
+    api-keys:
+      - name: admin
+        key: test-admin-key-0123456789
+        role: ADMIN
+      - name: user
+        key: test-user-key-0123456789
+        role: USER

@@ -1,23 +1,78 @@
 server:
-  port: 8080
+  port: ${PORT:8080}
+  shutdown: graceful
+
+spring:
+  application:
+    name: bfsi-rag-assistant
+  datasource:
+    # Default: an H2 database file under ./data (no install needed). docker-compose and the
+    # "postgres" profile switch to Postgres + pgvector.
+    url: ${RAG_DB_URL:jdbc:h2:file:./data/rag;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;DEFAULT_NULL_ORDERING=HIGH}
+    username: ${RAG_DB_USER:sa}
+    password: ${RAG_DB_PASSWORD:}
+  flyway:
+    locations: classpath:db/migration/{vendor}
+  servlet:
+    multipart:
+      max-file-size: 20MB
+      max-request-size: 21MB
+  mvc:
+    async:
+      request-timeout: 180s
 
 rag:
-  corpus: classpath*:corpus/*.md     # loaded at start-up; more can be posted to /api/documents
+  corpus: classpath*:corpus/*.md     # bundled documents, written to the database at start-up
   chunk-size: 700                    # characters per chunk
   chunk-overlap: 120                 # so a rule split across two chunks is still found whole
   top-k: 4                           # chunks handed to the model
-  min-score: 0.15                    # below this the assistant says it cannot find the answer
+  min-score: 0.30                    # below this the assistant says it cannot find the answer (tuned on the eval set)
+  retrieval:
+    semantic-weight: ${RAG_SEMANTIC_WEIGHT:0.6}  # 0 = lexical only
+    semantic-floor: 0.25             # embedding cosine at or below this counts as unrelated
+    vector-store: ${RAG_VECTOR_STORE:memory}     # memory | pgvector
+  conversation:
+    max-turns: 3                     # earlier turns used to understand a follow-up question
+    max-turn-chars: 1000
   llm:
     provider: ${RAG_LLM_PROVIDER:auto}   # auto = Claude when ANTHROPIC_API_KEY is set, else extractive
     model: ${RAG_LLM_MODEL:claude-opus-5-5}
     effort: ${RAG_LLM_EFFORT:medium}     # low | medium | high - set explicitly; grounded Q&A rarely needs more
     max-tokens: 16000                    # thinking is always on for Opus 5.5 and counts against this
-    timeout-seconds: 60
-  audit:
-    file: ${RAG_AUDIT_FILE:}         # empty = in memory only
+    timeout-seconds: 120
+  security:
+    asks-per-minute: ${RAG_ASKS_PER_MINUTE:30}
+    api-keys:                        # an unset key is generated at start-up and logged (development only)
+      - name: admin
+        key: ${RAG_ADMIN_KEY:}
+        role: ADMIN
+      - name: user
+        key: ${RAG_USER_KEY:}
+        role: USER
 
 management:
   endpoints:
     web:
       exposure:
-        include: health,info,metrics
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      probes:
+        enabled: true
+  metrics:
+    tags:
+      application: ${spring.application.name}
+
+---
+spring:
+  config:
+    activate:
+      on-profile: postgres
+  datasource:
+    # Either a full JDBC URL, or host/port/name (what platforms such as Render provide separately).
+    url: ${RAG_DB_URL:jdbc:postgresql://${RAG_DB_HOST:localhost}:${RAG_DB_PORT:5432}/${RAG_DB_NAME:rag}}
+    username: ${RAG_DB_USER:rag}
+    password: ${RAG_DB_PASSWORD:rag}
+rag:
+  retrieval:
+    vector-store: ${RAG_VECTOR_STORE:pgvector}

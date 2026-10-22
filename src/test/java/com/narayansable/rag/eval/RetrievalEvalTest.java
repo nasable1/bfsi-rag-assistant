@@ -1,7 +1,7 @@
 package com.narayansable.rag.eval;
 
 import com.narayansable.rag.TestSupport;
-import com.narayansable.rag.index.HybridIndex;
+import com.narayansable.rag.index.Retriever;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
@@ -35,11 +35,11 @@ class RetrievalEvalTest {
             Map.entry("How is a duplicate payment detected?", "payment-exceptions"),
             Map.entry("How quickly are complaints resolved?", "payment-exceptions"));
 
-    private static HybridIndex index;
+    private static Retriever index;
 
     @BeforeAll
     static void load() {
-        index = TestSupport.corpusIndex();
+        index = TestSupport.corpusRetriever();
     }
 
     @Test
@@ -50,6 +50,8 @@ class RetrievalEvalTest {
             List<String> docs = index.search(g.getKey(), 3).stream().map(h -> h.chunk().documentId()).toList();
             if (!docs.isEmpty() && docs.get(0).equals(g.getValue())) {
                 hit1++;
+            } else {
+                System.out.println("NOT FIRST: " + g.getKey() + " -> " + docs);
             }
             if (docs.contains(g.getValue())) {
                 hit3++;

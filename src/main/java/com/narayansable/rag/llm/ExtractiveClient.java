@@ -24,6 +24,17 @@ public class ExtractiveClient implements LlmClient {
         return "extractive";
     }
 
+    /** Hands the answer over one cited sentence at a time, as a model would stream it. */
+    @Override
+    public String stream(String question, List<ScoredChunk> sources, java.util.function.Consumer<String> onDelta) {
+        String answer = answer(question, sources);
+        String[] sentences = answer.split("(?<=]) ");
+        for (int i = 0; i < sentences.length; i++) {
+            onDelta.accept(i < sentences.length - 1 ? sentences[i] + " " : sentences[i]);
+        }
+        return answer;
+    }
+
     @Override
     public String answer(String question, List<ScoredChunk> sources) {
         Set<String> q = new HashSet<>(Tokenizer.tokens(question));

@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>BFSI RAG Assistant</title>
+    <link rel="icon" href="favicon.svg" type="image/svg+xml">
+    <link rel="stylesheet" href="app.css">
+    <script src="app.js" defer></script>
+</head>
+<body>
+<header class="top">
+    <div class="brand">
+        <svg class="logo" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 10 12 4l9 6v1H3zM5 12h2v6H5zm4 0h2v6H9zm4 0h2v6h-2zm4 0h2v6h-2zM3 19h18v2H3z"/></svg>
+        <div>
+            <h1>BFSI RAG Assistant</h1>
+            <p class="sub">Answers from the bank's documents only - every answer cites its source.</p>
+        </div>
+    </div>
+    <div class="status" id="status" aria-live="polite"></div>
+</header>
+
+<section class="keybar" id="keybar">
+    <form id="key-form" autocomplete="off">
+        <label for="api-key">API key</label>
+        <input id="api-key" type="password" placeholder="Paste your API key" spellcheck="false">
+        <button type="submit">Connect</button>
+        <span class="who" id="who"></span>
+    </form>
+</section>
+
+<main class="layout">
+    <section class="chat" aria-label="Conversation">
+        <div class="thread" id="thread">
+            <div class="empty" id="empty">
+                <h2>Ask about payments, approvals, sweeps, KYC or exceptions</h2>
+                <div class="examples" id="examples">
+                    <button type="button" class="example">How many checkers approve a Rs 3 crore payment?</button>
+                    <button type="button" class="example">When do end-of-day sweeps run?</button>
+                    <button type="button" class="example">Can one person both enter and approve a transaction?</button>
+                    <button type="button" class="example">What is the IMPS limit for a newly added beneficiary?</button>
+                </div>
+            </div>
+        </div>
+        <form class="composer" id="ask-form">
+            <textarea id="question" rows="2" maxlength="1000" placeholder="Ask a question (Enter to send, Shift+Enter for a new line)"></textarea>
+            <div class="composer-actions">
+                <button type="button" class="ghost" id="new-chat" title="Forget the conversation so far">New conversation</button>
+                <button type="submit" id="ask-btn">Ask</button>
+            </div>
+        </form>
+    </section>
+
+    <aside class="admin" id="admin" hidden>
+        <h2>Documents</h2>
+        <form id="upload-form" class="upload">
+            <input id="upload-file" type="file" accept=".pdf,.docx,.md,.markdown,.txt" required>
+            <input id="upload-id" type="text" placeholder="id (optional, e.g. cheque-policy)" pattern="[a-z0-9][a-z0-9-]{1,59}">
+            <button type="submit">Upload</button>
+            <p class="hint">PDF, Word (.docx), Markdown or text, up to 20 MB. Same id replaces the document.</p>
+            <p class="msg" id="upload-msg" role="status"></p>
+        </form>
+        <ul class="docs" id="docs"></ul>
+        <h2>Audit trail</h2>
+        <div class="audit">
+            <button type="button" id="verify-btn" class="ghost">Verify chain</button>
+            <p class="msg" id="audit-msg" role="status"></p>
+        </div>
+    </aside>
+</main>
+
+<template id="answer-tpl">
+    <article class="turn">
+        <div class="q"></div>
+        <div class="a">
+            <div class="interpreted" hidden></div>
+            <div class="text" aria-live="polite"></div>
+            <div class="flags"></div>
+            <ol class="sources"></ol>
+            <div class="meta"></div>
+        </div>
+    </article>
+</template>
+</body>
+</html>
