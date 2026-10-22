@@ -57,7 +57,12 @@ public class ApiKeyRegistry {
                 throw new IllegalStateException("API key for '" + k.name() + "' is shorter than " + MIN_KEY_LENGTH
                         + " characters");
             }
-            keys.add(new Stored(sha256(key.strip()), new Caller(k.name(), role)));
+            byte[] digest = sha256(key.strip());
+            // One key for two callers would resolve to whichever is listed last - possibly ADMIN for a USER.
+            if (keys.stream().anyMatch(s -> MessageDigest.isEqual(s.digest(), digest))) {
+                throw new IllegalStateException("API key for '" + k.name() + "' is the same as another caller's");
+            }
+            keys.add(new Stored(digest, new Caller(k.name(), role)));
         }
         if (keys.isEmpty()) {
             throw new IllegalStateException("No API keys configured (rag.security.api-keys)");

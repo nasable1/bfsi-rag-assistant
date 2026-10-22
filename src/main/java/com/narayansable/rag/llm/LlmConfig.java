@@ -30,6 +30,12 @@ public class LlmConfig {
             throw new IllegalStateException("rag.llm.provider must be auto, claude or extractive, not '"
                     + llm.provider() + "'");
         }
+        String effort = llm.effort() == null ? "" : llm.effort().strip().toLowerCase(Locale.ROOT);
+        if (!List.of("low", "medium", "high", "xhigh", "max").contains(effort)) {
+            // Same reason: an invalid effort would fail every call and quietly degrade every answer.
+            throw new IllegalStateException("rag.llm.effort must be low, medium, high, xhigh or max, not '"
+                    + llm.effort() + "'");
+        }
         String key = System.getenv("ANTHROPIC_API_KEY");
         boolean haveKey = key != null && !key.isBlank();
         boolean useClaude = provider.equals("claude") || (provider.equals("auto") && haveKey);
@@ -42,7 +48,7 @@ public class LlmConfig {
                 .timeout(Duration.ofSeconds(llm.timeoutSeconds()))
                 .maxRetries(3)
                 .build();
-        log.info("Answer generation: {} (effort {})", llm.model(), llm.effort());
-        return new ClaudeClient(client, llm.model(), llm.maxTokens(), llm.effort());
+        log.info("Answer generation: {} (effort {})", llm.model(), effort);
+        return new ClaudeClient(client, llm.model(), llm.maxTokens(), effort);
     }
 }

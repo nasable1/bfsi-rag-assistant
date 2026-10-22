@@ -97,7 +97,11 @@ public class DocumentParser {
                 out.append(paragraphs(stripper.getText(pdf)));
             }
             return out.toString();
-        } catch (IOException e) {
+        } catch (IOException | RuntimeException e) {
+            // PDFBox throws runtime exceptions on some malformed files: the caller's bad input, not a 500.
+            if (e instanceof UnreadableDocumentException u) {
+                throw u;
+            }
             throw new UnreadableDocumentException("Not a readable PDF");
         }
     }

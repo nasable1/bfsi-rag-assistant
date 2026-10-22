@@ -111,7 +111,8 @@ public class DocumentService {
             throw new DocumentParser.UnreadableDocumentException("The document contains no indexable text");
         }
         // Database first: if the write fails, the index still matches what is stored.
-        repo.save(new DocumentRepository.StoredDocument(doc.id(), doc.title(), doc.text(), "upload", fileName,
+        repo.save(new DocumentRepository.StoredDocument(doc.id(), doc.title(), doc.text(), "upload",
+                fileName == null ? null : clip(fileName.replaceAll("^.*[/\\\\]", ""), MAX_FILE_NAME),
                 sha256(doc.text()), user, Instant.now()));
         retriever.replaceDocument(doc.id(), chunks);
         return new Ingested(doc.id(), doc.title(), chunks.size(), r.masked());
@@ -137,7 +138,15 @@ public class DocumentService {
     private Redacted redacted(ParsedDocument d) {
         var text = redactor.redact(d.text());
         var title = redactor.redact(d.title());
-        return new Redacted(new ParsedDocument(d.id(), title.text(), text.text()), text.found());
+        return new Redacted(new ParsedDocument(d.id(), clip(title.text().strip(), MAX_TITLE), text.text()), text.found());
+    }
+
+    /** The column widths of the documents table: a long first heading or file name must not fail the upload. */
+    static final int MAX_TITLE = 300;
+    static final int MAX_FILE_NAME = 255;
+
+    static String clip(String s, int max) {
+        return s.length() <= max ? s : s.substring(0, max - 3).strip() + "...";
     }
 
     private static void requireValidId(String id) {
