@@ -209,3 +209,7 @@ Keys go in `X-API-Key: <key>` or `Authorization: Bearer <key>`.
 - The jar is ~220 MB and the image ~860 MB, mostly ONNX Runtime's native libraries for every platform.
 - A Postgres superuser can drop the append-only triggers; external checkpoints of the audit head are
   what make tampering by a database administrator detectable.
+
+## License
+
+MIT - see [LICENSE](LICENSE).
