@@ -1,6 +1,7 @@
 package com.narayansable.rag.security;
 
 import com.narayansable.rag.config.RagProperties;
+import com.narayansable.rag.index.Access;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -26,7 +27,20 @@ public class ApiKeyRegistry {
 
     public enum Role { USER, ADMIN }
 
-    public record Caller(String name, Role role) {
+    public record Caller(String name, Role role, Set<String> groups) {
+
+        public Caller {
+            groups = Set.copyOf(groups == null ? Set.of() : groups);
+        }
+
+        public Caller(String name, Role role) {
+            this(name, role, Set.of());
+        }
+
+        /** ADMIN retrieves everything; a USER sees open documents and those of its groups. */
+        public Access access() {
+            return role == Role.ADMIN ? Access.ALL : new Access(false, groups);
+        }
     }
 
     private record Stored(byte[] digest, Caller caller) {
@@ -62,7 +76,13 @@ public class ApiKeyRegistry {
             if (keys.stream().anyMatch(s -> MessageDigest.isEqual(s.digest(), digest))) {
                 throw new IllegalStateException("API key for '" + k.name() + "' is the same as another caller's");
             }
-            keys.add(new Stored(digest, new Caller(k.name(), role)));
+            Set<String> groups;
+            try {
+                groups = Access.normalise(k.groups());
+            } catch (IllegalArgumentException e) {
+                throw new IllegalStateException("API key '" + k.name() + "': " + e.getMessage());
+            }
+            keys.add(new Stored(digest, new Caller(k.name(), role, groups)));
         }
         if (keys.isEmpty()) {
             throw new IllegalStateException("No API keys configured (rag.security.api-keys)");

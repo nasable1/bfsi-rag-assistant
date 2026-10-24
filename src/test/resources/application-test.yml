@@ -14,3 +14,7 @@ rag:
       - name: user
         key: test-user-key-0123456789
         role: USER
+      - name: treasury-desk
+        key: test-treasury-key-0123456789
+        role: USER
+        groups: [treasury]

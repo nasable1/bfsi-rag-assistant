@@ -4,6 +4,7 @@ import com.narayansable.rag.answer.Answer;
 import com.narayansable.rag.answer.AnswerService;
 import com.narayansable.rag.audit.AuditTrail;
 import com.narayansable.rag.config.RagProperties;
+import com.narayansable.rag.index.Access;
 import com.narayansable.rag.index.Retriever;
 import com.narayansable.rag.llm.LlmClient;
 import com.narayansable.rag.security.RateLimiter;
@@ -73,7 +74,7 @@ public class AskController {
     @PostMapping("/ask")
     public Answer ask(@Valid @RequestBody AskRequest request, Authentication auth) {
         throttle(auth);
-        return answers.ask(request.toQuestion(), auth.getName(), delta -> {
+        return answers.ask(request.toQuestion(), auth.getName(), Callers.access(auth), delta -> {
         });
     }
 
@@ -86,21 +87,22 @@ public class AskController {
     public SseEmitter stream(@Valid @RequestBody AskRequest request, Authentication auth) {
         throttle(auth);
         String user = auth.getName();
+        var access = Callers.access(auth);       // read here: the security context does not follow the task
         SseEmitter emitter = new SseEmitter(STREAM_TIMEOUT_MS);
         var question = request.toQuestion();
         try {
-            executor.execute(() -> run(emitter, question, user));
+            executor.execute(() -> run(emitter, question, user, access));
         } catch (TaskRejectedException e) {
             throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "Too many answers in progress - retry shortly");
         }
         return emitter;
     }
 
-    private void run(SseEmitter emitter, AnswerService.Question question, String user) {
+    private void run(SseEmitter emitter, AnswerService.Question question, String user, Access access) {
         // If the client goes away the answer still completes and is audited; sending just stops.
         boolean[] gone = {false};
         try {
-            Answer a = answers.ask(question, user, delta -> {
+            Answer a = answers.ask(question, user, access, delta -> {
                 if (!gone[0]) {
                     gone[0] = !send(emitter, "delta", Map.of("text", delta));
                 }
@@ -135,7 +137,7 @@ public class AskController {
     public Map<String, Object> me(Authentication auth) {
         String role = auth.getAuthorities().stream().map(a -> a.getAuthority().replace("ROLE_", "")).findFirst()
                 .orElse("USER");
-        return Map.of("name", auth.getName(), "role", role);
+        return Map.of("name", auth.getName(), "role", role, "groups", Callers.groups(auth));
     }
 
     @GetMapping("/stats")

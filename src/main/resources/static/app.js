@@ -262,7 +262,8 @@ async function refreshDocs() {
             const li = el("li");
             const info = el("div");
             info.append(el("span", "title", d.title),
-                el("span", "src", d.id + " - " + d.source + (d.uploadedBy !== "system" ? " by " + d.uploadedBy : "")));
+                el("span", "src", d.id + " - " + d.source + (d.uploadedBy !== "system" ? " by " + d.uploadedBy : "")
+                    + (d.accessGroups && d.accessGroups.length ? " - groups: " + d.accessGroups.join(", ") : "")));
             const del = el("button", null, "Delete");
             del.type = "button";
             del.setAttribute("aria-label", "Delete " + d.title);
@@ -293,13 +294,16 @@ async function upload(ev) {
     form.append("file", file);
     const id = $("upload-id").value.trim();
     if (id) form.append("id", id);
+    const groups = $("upload-groups").value.trim();
+    if (groups) form.append("groups", groups);
     msg.className = "msg";
     msg.textContent = "Uploading " + file.name + "...";
     try {
         const r = await (await api("/api/documents/upload", { method: "POST", body: form })).json();
         msg.className = "msg ok";
         msg.textContent = "Indexed \"" + r.title + "\" as " + r.id + " (" + r.chunks + " chunks"
-            + (r.piiMasked.length ? "; masked " + r.piiMasked.join(", ") : "") + ").";
+            + (r.piiMasked.length ? "; masked " + r.piiMasked.join(", ") : "")
+            + (r.accessGroups && r.accessGroups.length ? "; visible to " + r.accessGroups.join(", ") : "; visible to everyone") + ").";
         $("upload-form").reset();
         await refreshDocs();
         refreshStatus();

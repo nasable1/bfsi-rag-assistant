@@ -10,6 +10,7 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -20,6 +21,7 @@ import java.util.List;
 public class ApiKeyAuthFilter extends OncePerRequestFilter {
 
     public static final String HEADER = "X-API-Key";
+    public static final String GROUP_PREFIX = "GROUP_";
     private final ApiKeyRegistry registry;
 
     public ApiKeyAuthFilter(ApiKeyRegistry registry) {
@@ -43,8 +45,10 @@ public class ApiKeyAuthFilter extends OncePerRequestFilter {
             SecurityResponses.write(response, HttpServletResponse.SC_UNAUTHORIZED, "Invalid API key");
             return;
         }
-        var token = new UsernamePasswordAuthenticationToken(caller.get().name(), null,
-                List.of(new SimpleGrantedAuthority("ROLE_" + caller.get().role())));
+        List<SimpleGrantedAuthority> authorities = new ArrayList<>();
+        authorities.add(new SimpleGrantedAuthority("ROLE_" + caller.get().role()));
+        caller.get().groups().forEach(g -> authorities.add(new SimpleGrantedAuthority(GROUP_PREFIX + g)));
+        var token = new UsernamePasswordAuthenticationToken(caller.get().name(), null, authorities);
         var context = SecurityContextHolder.createEmptyContext();
         context.setAuthentication(token);
         SecurityContextHolder.setContext(context);

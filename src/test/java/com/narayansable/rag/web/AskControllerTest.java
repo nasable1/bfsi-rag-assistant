@@ -211,4 +211,35 @@ class AskControllerTest {
         }
         return last;
     }
+
+    @Test
+    void restrictedDocumentsReachOnlyTheirGroups() throws Exception {
+        String treasury = "test-treasury-key-0123456789";
+        String q = "{\"question\":\"What is the intraday dealing limit per counterparty?\"}";
+        mvc.perform(post("/api/documents").header("X-API-Key", ADMIN).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"id\":\"treasury-limits\",\"accessGroups\":[\"treasury\"],\"markdown\":"
+                                + "\"# Treasury dealing limits\\n\\nThe intraday dealing limit per counterparty is Rs 750 "
+                                + "crore, approved by the treasury head.\"}"))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.accessGroups[0]").value("treasury"));
+        try {
+            // The open corpus may still answer something; the restricted document must never be its source.
+            mvc.perform(ask(USER, q)).andExpect(status().isOk())
+                    .andExpect(jsonPath("$.citations[*].documentId", not(org.hamcrest.Matchers.hasItem("treasury-limits"))))
+                    .andExpect(jsonPath("$.answer", not(containsString("750"))));
+            mvc.perform(ask(treasury, q)).andExpect(status().isOk())
+                    .andExpect(jsonPath("$.grounded").value(true))
+                    .andExpect(jsonPath("$.citations[0].documentId").value("treasury-limits"));
+            mvc.perform(get("/api/documents").header("X-API-Key", USER))
+                    .andExpect(jsonPath("$[*].id", not(org.hamcrest.Matchers.hasItem("treasury-limits"))));
+            mvc.perform(get("/api/documents").header("X-API-Key", treasury))
+                    .andExpect(jsonPath("$[*].id", org.hamcrest.Matchers.hasItem("treasury-limits")));
+            mvc.perform(get("/api/me").header("X-API-Key", treasury)).andExpect(jsonPath("$.groups[0]").value("treasury"));
+            mvc.perform(post("/api/documents").header("X-API-Key", ADMIN).contentType(MediaType.APPLICATION_JSON)
+                            .content("{\"id\":\"bad-groups\",\"accessGroups\":[\"no spaces\"],\"markdown\":\"# X\\n\\nText.\"}"))
+                    .andExpect(status().is4xxClientError());
+        } finally {
+            mvc.perform(delete("/api/documents/treasury-limits").header("X-API-Key", ADMIN));
+        }
+    }
 }

@@ -49,6 +49,7 @@ rag:
       - name: user
         key: ${RAG_USER_KEY:}
         role: USER
+        groups: []                   # access groups beyond the open documents, e.g. [treasury, operations]
 
 management:
   endpoints:

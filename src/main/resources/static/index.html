@@ -56,6 +56,7 @@
         <form id="upload-form" class="upload">
             <input id="upload-file" type="file" accept=".pdf,.docx,.md,.markdown,.txt" required>
             <input id="upload-id" type="text" placeholder="id (optional, e.g. cheque-policy)" pattern="[a-z0-9][a-z0-9-]{1,59}">
+            <input id="upload-groups" type="text" placeholder="access groups (optional, e.g. treasury, ops) - empty = everyone">
             <button type="submit">Upload</button>
             <p class="hint">PDF, Word (.docx), Markdown or text, up to 20 MB. Same id replaces the document.</p>
             <p class="msg" id="upload-msg" role="status"></p>

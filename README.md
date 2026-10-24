@@ -5,10 +5,10 @@
 Grounded question answering over a bank's product and policy documents, built the way a regulated
 bank would need it: **every answer cites its source, personal data never reaches the model, injected
 instructions are refused, every exchange is in a tamper-evident audit trail, and both retrieval and
-answer quality are build gates.**
+answer quality are build gates. Each caller retrieves only the documents it is entitled to.**
 
 Spring Boot 3.5 · Java 17 · Anthropic Claude (official Java SDK) · hybrid lexical + semantic search
-(in-process embeddings, optional pgvector) · Postgres or H2 · web UI · 100 tests, no API key needed.
+(in-process embeddings, optional pgvector) · entitlement-filtered retrieval · Postgres or H2 · web UI · 110 tests, no API key needed.
 
 > The corpus is a **fictional "Demo Bank"** written for this project (payment cut-offs, maker-checker,
 > liquidity sweeps, KYC, exceptions). It is illustrative only - not any real bank's policy.
@@ -21,6 +21,7 @@ Spring Boot 3.5 · Java 17 · Anthropic Claude (official Java SDK) · hybrid lex
 - **Streaming** - text appears as it is written; the checked answer then replaces the draft.
 - **Upload PDF, Word, Markdown or text** - searchable immediately; re-uploading the same id replaces it.
 - **Refuses rather than guesses** - a question the documents do not cover gets "not in the documents".
+- **Entitlements** - a document can be limited to access groups (`treasury`, `operations`...); a caller only retrieves open documents and those of its groups, so a restricted policy can neither be cited nor shape an answer.
 
 ```
 POST /api/ask   X-API-Key: <user key>
@@ -136,6 +137,11 @@ flowchart LR
    the tail: the running service knows the head it wrote, and an external system can record
    `GET /api/audit/head` as a checkpoint and confirm it later with `POST /api/audit/checkpoint`.
 10. **Least privilege.** USER keys can ask; only ADMIN keys can change documents or read the audit.
+    **Entitlements are enforced inside retrieval**, before ranking and before the model: a USER key carries
+    access groups, a document may carry groups, and a chunk the caller may not see is never scored, cited or
+    sent to the model. "Not in the documents" reads the same whether the answer is absent or hidden, so a
+    restricted document's existence does not leak, and the document list shows each caller only what it may
+    retrieve. ADMIN sees everything.
     Each caller is rate-limited (every question may cost a model call). The UI is served with a strict
     Content-Security-Policy and renders all server text as text, never HTML.
 
@@ -144,7 +150,7 @@ flowchart LR
 **Locally** (Java 17; H2 database file in `./data`, no other install):
 
 ```bash
-mvn test                                   # 100 tests (the Postgres ones run when Docker is available)
+mvn test                                   # 110 tests (the Postgres ones run when Docker is available)
 export RAG_ADMIN_KEY=$(openssl rand -base64 24) RAG_USER_KEY=$(openssl rand -base64 24)
 mvn spring-boot:run                        # extractive mode - no Anthropic key, no network
 ANTHROPIC_API_KEY=sk-ant-... mvn spring-boot:run   # Claude (claude-opus-5-5, effort medium)
@@ -169,9 +175,9 @@ for you). Check plan sizes first: the service uses about 400 MB with the embeddi
 |---|---|---|
 | `POST /api/ask` | USER | `{"question": "...", "history": [{"question","answer"}...]}` → answer JSON |
 | `POST /api/ask/stream` | USER | same body; Server-Sent Events: `delta` (draft text), then `answer` (checked) or `error` |
-| `GET /api/me`, `GET /api/stats`, `GET /api/documents` | USER | caller, index and audit status, document list |
-| `POST /api/documents` | ADMIN | `{"id": "...", "markdown": "..."}` |
-| `POST /api/documents/upload` | ADMIN | multipart `file` (.pdf .docx .md .txt, ≤ 20 MB), optional `id` |
+| `GET /api/me`, `GET /api/stats`, `GET /api/documents` | USER | caller (with its groups), index and audit status, the documents this caller may retrieve |
+| `POST /api/documents` | ADMIN | `{"id": "...", "markdown": "...", "accessGroups": ["treasury"]}` (groups optional; none = every caller) |
+| `POST /api/documents/upload` | ADMIN | multipart `file` (.pdf .docx .md .txt, ≤ 20 MB), optional `id`, optional `groups` (comma-separated) |
 | `DELETE /api/documents/{id}` | ADMIN | |
 | `GET /api/audit`, `/api/audit/{seq}`, `/api/audit/head`, `/api/audit/verify` | ADMIN | |
 | `POST /api/audit/checkpoint` | ADMIN | `{"seq": n, "hash": "..."}` → `{"valid": true/false}` |
@@ -190,7 +196,7 @@ Keys go in `X-API-Key: <key>` or `Authorization: Bearer <key>`.
 
 | Setting (env) | Default | |
 |---|---|---|
-| `RAG_ADMIN_KEY`, `RAG_USER_KEY` | generated (logged) | API keys, 16+ characters; more callers in `rag.security.api-keys` |
+| `RAG_ADMIN_KEY`, `RAG_USER_KEY` | generated (logged) | API keys, 16+ characters; more callers, each with optional `groups`, in `rag.security.api-keys` |
 | `ANTHROPIC_API_KEY` | - | answers come from Claude when set (`RAG_LLM_PROVIDER=auto`) |
 | `RAG_LLM_PROVIDER` | `auto` | `auto`, `claude` or `extractive` |
 | `RAG_LLM_MODEL`, `RAG_LLM_EFFORT` | `claude-opus-5-5`, `medium` | |
@@ -204,6 +210,7 @@ Keys go in `X-API-Key: <key>` or `Authorization: Bearer <key>`.
 - The extractive (offline) answerer quotes up to three source sentences; it can include a sentence
   that is related but not needed. Claude answers are more precise.
 - The rate limit is per instance; behind several instances add a shared limit at the gateway.
+- Access groups come from API-key configuration. In a bank they would come from the identity provider (OIDC group claims) and the document's classification in the content system.
 - The H2 default is for a single local instance. Use Postgres for anything shared.
 - Bundled corpus documents are re-added at start-up if deleted (uploads with the same id win).
 - The jar is ~220 MB and the image ~860 MB, mostly ONNX Runtime's native libraries for every platform.

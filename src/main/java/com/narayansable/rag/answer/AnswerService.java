@@ -4,6 +4,7 @@ import com.narayansable.rag.audit.AuditTrail;
 import com.narayansable.rag.config.RagProperties;
 import com.narayansable.rag.guard.PiiRedactor;
 import com.narayansable.rag.guard.PromptInjectionDetector;
+import com.narayansable.rag.index.Access;
 import com.narayansable.rag.index.Retriever;
 import com.narayansable.rag.index.ScoredChunk;
 import com.narayansable.rag.llm.ExtractiveClient;
@@ -84,7 +85,12 @@ public class AnswerService {
         });
     }
 
+    /** Every document is in scope (evaluation and tests); callers come in through the overload with Access. */
     public Answer ask(Question q, String user, Consumer<String> onDelta) {
+        return ask(q, user, Access.ALL, onDelta);
+    }
+
+    public Answer ask(Question q, String user, Access access, Consumer<String> onDelta) {
         long start = System.nanoTime();
         List<String> flags = new ArrayList<>();
 
@@ -123,7 +129,7 @@ public class AnswerService {
         }
         String interpreted = standalone.equals(question) ? null : standalone;
 
-        List<ScoredChunk> hits = retriever.search(standalone, props.topK());
+        List<ScoredChunk> hits = retriever.search(standalone, props.topK(), access);
         List<ScoredChunk> sources = hits.stream().filter(h -> h.score() >= props.minScore()).toList();
         if (sources.isEmpty()) {
             flags.add("low-confidence");

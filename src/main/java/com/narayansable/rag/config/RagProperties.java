@@ -7,6 +7,7 @@ import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotNull;
 import org.springframework.boot.context.properties.ConfigurationProperties;
+import org.springframework.boot.context.properties.bind.ConstructorBinding;
 import org.springframework.validation.annotation.Validated;
 
 import java.util.List;
@@ -53,7 +54,16 @@ public record RagProperties(
      */
     public record Security(List<ApiKey> apiKeys, @Min(1) int asksPerMinute) {
 
-        public record ApiKey(String name, String key, String role) {
+        /** {@code groups}: the access groups this caller may retrieve, beyond the open documents. */
+        public record ApiKey(String name, String key, String role, List<String> groups) {
+
+            @ConstructorBinding                      // the binder needs to know which constructor to use
+            public ApiKey {
+            }
+
+            public ApiKey(String name, String key, String role) {
+                this(name, key, role, List.of());
+            }
         }
     }
 }

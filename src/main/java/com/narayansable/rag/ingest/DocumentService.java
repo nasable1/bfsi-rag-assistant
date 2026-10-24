@@ -2,6 +2,7 @@ package com.narayansable.rag.ingest;
 
 import com.narayansable.rag.config.RagProperties;
 import com.narayansable.rag.guard.PiiRedactor;
+import com.narayansable.rag.index.Access;
 import com.narayansable.rag.index.Retriever;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -18,6 +19,7 @@ import java.time.Instant;
 import java.util.HexFormat;
 import java.util.List;
 import java.util.Locale;
+import java.util.Set;
 import java.util.regex.Pattern;
 
 /**
@@ -34,7 +36,7 @@ public class DocumentService {
     public static final Pattern ID = Pattern.compile("[a-z0-9][a-z0-9-]{1,59}");
     private static final Logger log = LoggerFactory.getLogger(DocumentService.class);
 
-    public record Ingested(String id, String title, int chunks, List<String> piiMasked) {
+    public record Ingested(String id, String title, int chunks, List<String> piiMasked, Set<String> accessGroups) {
     }
 
     private final RagProperties props;
@@ -58,7 +60,7 @@ public class DocumentService {
     public void start() {
         seedBundledCorpus();
         for (var d : repo.findAll()) {
-            index(new ParsedDocument(d.id(), d.title(), d.content()));
+            index(new ParsedDocument(d.id(), d.title(), d.content()), d.accessGroups());
         }
         log.info("Indexed {} documents, {} chunks (semantic search {})", retriever.documentCount(), retriever.size(),
                 retriever.semanticEnabled() ? "on" : "off");
@@ -80,27 +82,47 @@ public class DocumentService {
                     continue;                     // unchanged, or replaced by an upload - leave it
                 }
                 repo.save(new DocumentRepository.StoredDocument(id, doc.title(), doc.text(), "bundled",
-                        file.getFilename(), sha, "system", Instant.now()));
+                        file.getFilename(), sha, "system", Instant.now(), Set.of()));   // the demo corpus is open
             }
         } catch (IOException e) {
             throw new UncheckedIOException("Cannot read the bundled corpus " + props.corpus(), e);
         }
     }
 
-    /** Stores and indexes an uploaded file, replacing any document with the same id. */
-    public synchronized Ingested ingestFile(String id, String fileName, byte[] bytes, String user) {
+    /** Stores and indexes an uploaded file, open to every caller, replacing any document with the same id. */
+    public Ingested ingestFile(String id, String fileName, byte[] bytes, String user) {
+        return ingestFile(id, fileName, bytes, user, Set.of());
+    }
+
+    /** As above, retrievable only by callers in one of {@code accessGroups} (empty = everyone). */
+    public synchronized Ingested ingestFile(String id, String fileName, byte[] bytes, String user,
+                                            Set<String> accessGroups) {
         String docId = id == null || id.isBlank() ? idFrom(fileName) : id;
         requireValidId(docId);
-        return store(parser.parse(docId, fileName, bytes), fileName, user);
+        Set<String> groups = validGroups(accessGroups);
+        return store(parser.parse(docId, fileName, bytes), fileName, user, groups);
     }
 
-    /** Stores and indexes a Markdown document, replacing any document with the same id. */
-    public synchronized Ingested ingestMarkdown(String id, String markdown, String user) {
+    /** Stores and indexes a Markdown document, open to every caller, replacing any document with the same id. */
+    public Ingested ingestMarkdown(String id, String markdown, String user) {
+        return ingestMarkdown(id, markdown, user, Set.of());
+    }
+
+    public synchronized Ingested ingestMarkdown(String id, String markdown, String user, Set<String> accessGroups) {
         requireValidId(id);
-        return store(parser.markdown(id, markdown, id), null, user);
+        Set<String> groups = validGroups(accessGroups);
+        return store(parser.markdown(id, markdown, id), null, user, groups);
     }
 
-    private Ingested store(ParsedDocument parsed, String fileName, String user) {
+    private static Set<String> validGroups(Set<String> raw) {
+        try {
+            return Access.normalise(raw);
+        } catch (IllegalArgumentException e) {
+            throw new DocumentParser.UnreadableDocumentException(e.getMessage());
+        }
+    }
+
+    private Ingested store(ParsedDocument parsed, String fileName, String user, Set<String> groups) {
         Redacted r = redacted(parsed);
         if (!r.masked().isEmpty()) {
             log.warn("Document {}: masked {} before storing", parsed.id(), r.masked());
@@ -113,9 +135,9 @@ public class DocumentService {
         // Database first: if the write fails, the index still matches what is stored.
         repo.save(new DocumentRepository.StoredDocument(doc.id(), doc.title(), doc.text(), "upload",
                 fileName == null ? null : clip(fileName.replaceAll("^.*[/\\\\]", ""), MAX_FILE_NAME),
-                sha256(doc.text()), user, Instant.now()));
-        retriever.replaceDocument(doc.id(), chunks);
-        return new Ingested(doc.id(), doc.title(), chunks.size(), r.masked());
+                sha256(doc.text()), user, Instant.now(), groups));
+        retriever.replaceDocument(doc.id(), chunks, groups);
+        return new Ingested(doc.id(), doc.title(), chunks.size(), r.masked(), groups);
     }
 
     public synchronized boolean delete(String id) {
@@ -128,8 +150,13 @@ public class DocumentService {
         return repo.list();
     }
 
-    private void index(ParsedDocument doc) {
-        retriever.replaceDocument(doc.id(), chunker.split(doc));
+    /** The documents a caller may retrieve - a listing must not reveal what a caller cannot ask about. */
+    public List<DocumentRepository.Summary> list(Access access) {
+        return repo.list().stream().filter(d -> access.canSee(d.accessGroups())).toList();
+    }
+
+    private void index(ParsedDocument doc, Set<String> groups) {
+        retriever.replaceDocument(doc.id(), chunker.split(doc), groups);
     }
 
     private record Redacted(ParsedDocument doc, List<String> masked) {

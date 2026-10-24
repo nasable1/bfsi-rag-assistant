@@ -10,6 +10,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Hybrid retrieval: lexical evidence ({@link LexicalIndex}) blended with semantic similarity
@@ -28,6 +29,7 @@ public class Retriever {
     private final Embedder embedder;
     private final double semanticWeight;
     private final double semanticFloor;
+    private final Map<String, Set<String>> groups = new ConcurrentHashMap<>();   // documentId -> access groups
 
     public Retriever(LexicalIndex lexical, VectorStore vectors, Embedder embedder, RagProperties.Retrieval cfg) {
         this.lexical = lexical;
@@ -42,7 +44,13 @@ public class Retriever {
         this(lexical, null, null, new RagProperties.Retrieval(0, 0, "memory"));
     }
 
+    /** An open document (no access groups). */
     public void replaceDocument(String documentId, List<Chunk> chunks) {
+        replaceDocument(documentId, chunks, Set.of());
+    }
+
+    public void replaceDocument(String documentId, List<Chunk> chunks, Set<String> accessGroups) {
+        groups.put(documentId, Set.copyOf(accessGroups == null ? Set.of() : accessGroups));
         if (vectors != null) {
             vectors.replaceDocument(documentId, chunks);
         }
@@ -50,17 +58,26 @@ public class Retriever {
     }
 
     public void removeDocument(String documentId) {
+        groups.remove(documentId);
         lexical.removeDocument(documentId);
         if (vectors != null) {
             vectors.removeDocument(documentId);
         }
     }
 
+    /** Every document (ADMIN, evaluation, tests). */
     public List<ScoredChunk> search(String query, int k) {
+        return search(query, k, Access.ALL);
+    }
+
+    /** Only the chunks of documents the caller may see, ranked among themselves. */
+    public List<ScoredChunk> search(String query, int k, Access access) {
         Map<String, Double> lex = lexical.scores(query);
         Map<String, Double> sem = new HashMap<>();
         if (vectors != null && !query.isBlank()) {
-            for (VectorStore.Hit h : vectors.search(embedder.embed(query), Math.max(4 * k, 20))) {
+            // A filtered caller reads deeper into the semantic hits, so hidden documents cannot crowd them out.
+            int pool = Math.max(4 * k, 20) * (access.everything() ? 1 : 3);
+            for (VectorStore.Hit h : vectors.search(embedder.embed(query), pool)) {
                 double s = (h.cosine() - semanticFloor) / (1 - semanticFloor);
                 if (s > 0) {
                     sem.put(h.chunkId(), Math.min(1, s));
@@ -75,6 +92,9 @@ public class Retriever {
             if (c == null) {
                 continue;                         // removed between the two lookups
             }
+            if (!access.canSee(groups.get(c.documentId()))) {
+                continue;                         // not entitled: never ranked, never sent to the model
+            }
             double l = lex.getOrDefault(id, 0.0);
             double s = sem.getOrDefault(id, 0.0);
             double score = (1 - semanticWeight) * l + semanticWeight * s;
@@ -85,6 +105,11 @@ public class Retriever {
         hits.sort(Comparator.comparingDouble(ScoredChunk::score).reversed()
                 .thenComparing(h -> h.chunk().id()));
         return hits.subList(0, Math.min(k, hits.size()));
+    }
+
+    /** The access groups of a document; empty = open to every caller. */
+    public Set<String> accessGroups(String documentId) {
+        return groups.getOrDefault(documentId, Set.of());
     }
 
     public int size() {
